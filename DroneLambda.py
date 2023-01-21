@@ -4,10 +4,11 @@ from copy import deepcopy
 from fractions import Fraction
 from numbers import Number
 dbg=(lambda x,*s: (x,print(*s,x))[0]) #debug
+revange=(lambda a,b=None,c=1: range(b-c,a-c,-c) if b else range(a-c,-c,-c))
 decompose=(lambda n,l=None: (n>>i&1 for i in range(n.bit_length() if l==None else l)) if isinstance(n,Number) else chain(*n))
 recompose=(lambda i: reduce(int.__or__,(k<<j for j,k in enumerate(i))))
 
-inp=(dbg("(3+4-x+22-3)/3*(2+5-y+4-7)*5**4**2")#input('')
+inp=(dbg("1+(6+2*x)/2)/(2)")#"(a+b)*(a+b)+0"#"((3+4-x+22-3)/3*(2+5-y+4-7)*5**4**2"#input('')
      ).replace(' ','')
 digits='0123456789'
 #indexes=       (  0,      1,      2,      3,   4,       5,  6,       7,  8,  9,  10,         11,       12)
@@ -29,7 +30,6 @@ for i in inp:
 if acc:
     struc.append(acc)
 struc=list(map(lambda n: int(n) if all(map(digits.__contains__,n)) else n,struc)) #recognise ints
-print(struc)
 s=0
 while s<len(struc):
     if struc[s]=='-' and isinstance(struc[s+1],Number):
@@ -42,7 +42,6 @@ while s<len(struc):
     else:
         s+=1
 
-print(struc)
 new=[]
 no=False
 for a,b in pairwise(struc):
@@ -59,13 +58,26 @@ openings=[]
 closings=[]
 bracks=[]
 for i,n in enumerate(new):
-    b=(n in {'(',')'})*(-1)**(n==')')
+    b=(1 if n=='(' else -1 if n==')' else 0)
     if b:
         (openings if b==1 else closings).append(i)
     bracks.append((bracks[-1] if bracks else 0)+b)
-if len(openings)!=len(closings) or -1 in bracks:
-    print('brackets incorrect')
-    exit()
+
+left=right=abs(min(bracks))
+if len(openings)!=len(closings) or left:
+    disp=abs(len(openings)-len(closings))
+    if len(openings)>len(closings):
+        right+=disp
+    else:
+        left+=disp
+    openings=list(range(left))+[o+left for o in openings]
+    new=['(']*left+new
+    closings=[c+left for c in closings]+list(range(len(new),len(new)+right))
+    new+=[')']*right
+    bracks=list(range(1,left+1))+[b+left for b in bracks]+list(revange(right))
+    print("attempted to fix mismatched brackets")
+    print(''.join(map(str,new)))
+
 struc=[]
 i=0
 inds=[0]
@@ -104,6 +116,10 @@ def structrans(struc,f=None,lf=None,rev=False,fints=False):
                 break
             inds[-1]+=(-1)**rev
         if b: break
+    if f:
+        struc=f(struc,[0])[0]
+    if lf:
+        struc=lf(struc,[0])[0]
     return(struc)
 
 def lisp(struc,inds,o,rev=False): #my beloved
@@ -125,12 +141,20 @@ def lisp(struc,inds,o,rev=False): #my beloved
             if sub:
                 inds.append(1)
     return(struc,inds)
-struc=reduce(lambda s,o: structrans(struc,lambda s,i: lisp(s,i,*o),rev=o[1]),zip(prec[::-1],rights[::-1]),struc)
+
+def setAtInd(struc,inds,val): #function call cannot be assigned to directly for whatever reason
+    if len(inds)>1:
+        strucget(struc,inds[:-1])[inds[-2]]=val
+    else:
+        struc=val
+    return(struc)
+
 def unbracket(struc,inds): #not closed-form because in-place
     if len(strucget(struc,inds))==1:
-        strucget(struc,inds)[:]=strucget(struc,inds)[0]
+        struc=setAtInd(struc,inds,strucget(struc,inds)[0])
+        del inds[-1]
     return(struc,inds)
-structrans(struc,lf=unbracket)
+struc=structrans(reduce(lambda s,o: structrans(struc,lambda s,i: lisp(s,i,*o),rev=o[1]),zip(prec[::-1],rights[::-1]),structrans(struc,lf=unbracket)),lf=unbracket)
 
 straction=(lambda n: "Fraction("+str(n.numerator)+","+str(n.denominator)+")" if type(n)==Fraction else str(n)) #very suspicious
 def enact(struc,inds):
@@ -138,13 +162,16 @@ def enact(struc,inds):
     e=strucget(struc,inds)
     if type(e)==list:
         if e[0] in ops and all(map(lambda x: isinstance(x,Number),e[1:])):
-            strucget(struc,inds[:-1])[inds[-2]]=(Fraction(e[1],e[2]) if e[0]=='/' else eval(straction(e[1])+e[0]+straction(e[2])))
+            struc=setAtInd(struc,inds,(Fraction(e[1],e[2]) if e[0]=='/' else eval(straction(e[1])+e[0]+straction(e[2]))))
             diff=True
+    elif type(e)==Fraction:
+        if e.denominator==1:
+            struc=setAtInd(struc,inds,e.numerator)
     return(struc,inds)
 
 def inter(struc,inds):
     if type(strucget(struc,inds))!=list:
-        strucget(struc,inds[:-1])[inds[-2]]=1
+        struc=setAtInd(struc,inds,1)
     return(struc,inds)
 
 def collapse(struc,inds):
@@ -152,41 +179,48 @@ def collapse(struc,inds):
     if len(inds)>1:
         if all(map(lambda x: isinstance(x,Number),strucget(struc,inds))):
             diff=True
-            strucget(struc,inds[:-1])[inds[-2]]=sum(strucget(struc,inds))
+            struc=setAtInd(struc,inds,sum(strucget(struc,inds)))
     return(struc,inds)
 
-def enmax(struc,f,i=None,fints=False):
+def enmax(struc,f,i=None,fints=False,iints=False):
     if i:
-        struc=structrans(struc,i,fints=fints)
+        struc=structrans(struc,i,fints=iints)
     #print(struc)
     global diff
     diff=True
     while diff:
         diff=False
-        struc=structrans(struc,f)
+        struc=structrans(struc,f,fints=fints)
     return(struc)
 
-cost=(lambda struc: sum(enmax(struc,collapse,inter,True)))
+cost=(lambda struc: sum(enmax(struc,collapse,inter,False,True)))
+compute=(lambda struc: enmax(struc,enact,fints=True))
 
-struc=enmax(struc,enact)
+struc=compute(struc)
 
 def mutate(struc,inds):
     transitions=[]
-    f=strucget(struc,inds)[0]
+    call=strucget(struc,inds)
+    f=call[0]
     if f in ops:
-        strew=struc
-        if unc[ops.index(f)]:
-            strucget(strew,inds[:-1])[inds[-2]]=(lambda f,a,b: [f,b,a])(*strucget(strew,inds))
+        if unc[ops.index(f)]: #commutativity (swapping parameters)
+            strew=struc
+            strucget(strew,inds[:-1])[inds[-2]]=(lambda f,a,b: [f,b,a])(*call)
             #print('c',strew)
-            transitions.append(strew)
-        strew=struc
-        #print(strucget(strew,inds))
-        if type(strucget(strew,inds)[1])==list and ops.index(strucget(strew,inds)[1][0]) in assocpairs[ops.index(f)]:
-            strucget(strew,inds[:-1])[inds[-2]]=(lambda f,a,b: [f,[f,b,a[2]],a[1]])(*strucget(strew,inds))
+            transitions.append(compute(strew))
+        if type(call[1])==list and ops.index(call[1][0]) in assocpairs[ops.index(f)]: #associativity (swapping precedence)
+            strew=struc
+            strucget(strew,inds[:-1])[inds[-2]]=(lambda f,a,b: [f,a[1],[f,a[2],b]])(*call)
             #print('a',strew)
-            transitions.append(strew)
-        if f in {'*','/'} and type(strucget(strew,inds)[1])==list and strucget(strew,inds)[1][0]=='+':
-            strucget(strew,inds[:-1])[inds[-2]]=(lambda a,b: ['+',[f,a[1],b],[f,a[2],b]])(*strucget(strew,inds)[1:])
+            transitions.append(compute(strew))
+        if f in {'*','/'} and type(call[1])==list and call[1][0]=='+': #distributivity ((a+b)*c=a*c+b*c)
+            strew=struc
+            strucget(strew,inds[:-1])[inds[-2]]=(lambda a,b: ['+',[f,a[1],b],[f,a[2],b]])(*call[1:])
+            transitions.append(compute(strew))
+        if f=='+' and call[2]==0 or f in {'*','/','**'} and call[2]==1: #additive/multiplicative/divisive/exponential identities
+            strew=struc
+            strucget(strew,inds[:-1])[inds[-2]]=call[1]
+            transitions.append(compute(strew))
     return(transitions)
 print('mutating')
 def mutations(struc): # #intended to be such that all(map(lambda t: i in mutations(t),mutations(i))) is True
@@ -199,7 +233,7 @@ def mutations(struc): # #intended to be such that all(map(lambda t: i in mutatio
             inds.append(0)
             if go:
                 if type(strucget(struc,inds))==list:
-                    transitions+=mutate(struc[:],inds)
+                    transitions+=mutate(deepcopy(struc),inds)
                 go=False
         else:
             del inds[-1]
@@ -213,6 +247,7 @@ def mutations(struc): # #intended to be such that all(map(lambda t: i in mutatio
         go=True
         if b: break
     return(transitions)
+
 states=[struc]
 stateTransitions=[[]]
 searcheds=[False]
@@ -224,7 +259,7 @@ while dist<12 and length!=len(states):
     length=len(states)
     for i,(s,e) in enumerate(zip(states[:len(states)],searcheds[:len(states)])):
         if not e:
-            for m in mutations(s)+[enmax(deepcopy(s),enact)]:
+            for m in mutations(s):
                 if m in states:
                     stateTransitions[i].append(states.index(m))
                 else:
@@ -234,3 +269,4 @@ while dist<12 and length!=len(states):
                     stateTransitions.append([])
                     stateTransitions[i].append(len(states)-1)
     dist+=1
+#print('\n'.join(map(str,states)))
