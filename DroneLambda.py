@@ -18,6 +18,7 @@ commutativities=((True,),(True,),(True,),(False,False),(True,False),(True,False,
 associativities=((True,),(True,),(True,),(False,False),(True,False),(True,False,False,False),(False,),(False,),(False,))
 rights=         ( False,  False,  False,  False,        False,       False,                   False,   True,    False)
 (ops,unc,una)=map(lambda p: tuple(decompose(p)),(prec,commutativities,associativities))
+precs=tuple(map(lambda o: next(filter(lambda p: o in p[1],enumerate(prec)))[0],ops))
 assocpairs=     (  (),     (),     (),     (),  (),      (), (),     (),  (),  (),(),          (),      (),     ())
 assocpairs=tuple(starmap(lambda i,a: (i,)*a[0]+a[1],enumerate(zip(una,assocpairs))))
 struc=[]
@@ -204,6 +205,22 @@ def collapse(struc,inds):
         struc=strucset(struc,inds,sum(strucget(struc,inds)))
     return(struc,inds)
 
+def stringer(struc,inds):
+    g=strucget(struc,inds)
+    if type(g)!=list and g not in ops: #will have to be changed if functions are to be passed around within expressions (as I have been known to do)
+        struc=strucset(struc,inds,(str(g),-1)) #-1 is infinite because it just is, okay (look at its binary representation)
+    return(struc,inds)
+
+def strapse(struc,inds):
+    brack=(lambda t,g: '('+t[0]+')' if t[1]>0 and t[1]<g or t[1]==g and not una[g] else t[0])
+    global diff
+    g=strucget(struc,inds)
+    if type(g)==list and all(map(lambda x: type(x)==tuple,g[1:])): #tuples here used for storing precedence with string (very suspicious)
+        p=precs[ops.index(g[0])]
+        diff=True
+        struc=strucset(struc,inds,(g[0]+'('+','.join(map(lambda g: str(g[0]),g[1:]))+')' if g[0] in prec[-1] else g[0]+brack(g[1],p) if len(g)==2 else brack(g[1],p)+g[0]+brack(g[2],p),p))
+    return(struc,inds)
+
 def enmax(struc,f,i=None,fints=False,iints=False):
     if i:
         struc=structrans(struc,i,fints=iints)
@@ -217,6 +234,7 @@ def enmax(struc,f,i=None,fints=False,iints=False):
 
 cost=(lambda struc: enmax(struc,collapse,inter,False,True))
 compute=(lambda struc: enmax(struc,enact,fints=True))
+strucstr=(lambda struc: enmax(struc,strapse,stringer,False,True)[0])
 
 struc=compute(struc)
 
@@ -303,7 +321,7 @@ searcheds=[False]
 dist=1
 length=0
 while dist<18 and length!=len(states):
-    print(dist,len(states),(lambda s: (cost(deepcopy(s)),s))(min(states,key=lambda s: cost(deepcopy(s)))))
+    print(dist,len(states),(lambda s: (cost(deepcopy(s)),strucstr(deepcopy(s))))(min(states,key=lambda s: cost(deepcopy(s)))))
     length=len(states)
     for i,(s,e) in enumerate(zip(states[:len(states)],searcheds[:len(states)])):
         if not e:
