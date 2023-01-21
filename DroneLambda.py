@@ -3,23 +3,33 @@ from itertools import chain,pairwise,starmap
 from copy import deepcopy
 from fractions import Fraction
 from numbers import Number
-dbg=(lambda x,*s: (x,print(*s,x))[0]) #debug
+#print its arguments and return them (debug)
+dbg=(lambda x,*s: (x,print(*s,x))[0])
+#range but reversed
 revange=(lambda a,b=None,c=1: range(b-c,a-c,-c) if b else range(a-c,-c,-c))
+#int -> bitlist, list flattening (1 level)
 decompose=(lambda n,l=None: (n>>i&1 for i in range(n.bit_length() if l==None else l)) if isinstance(n,Number) else chain(*n))
+#bitlist -> int
 recompose=(lambda i: reduce(int.__or__,(k<<j for j,k in enumerate(i))))
 
 inp=(dbg("1+(6+2*x)/2)/(2)")#"(a+b)*(a+b)+0"#"((3+4-x+22-3)/3*(2+5-y+4-7)*5**4**2"#input('')
      ).replace(' ','')
 digits='0123456789'
 #indexes=       (  0,      1,      2,      3,   4,       5,  6,       7,  8,  9,  10,         11,       12)
+#ops
 prec=           (('|',), ('^',), ('&',), ('<<','>>'),  ('+','-'),   ('*','/','%','//'),      ('~',),  ('**',))
+#unc - if can do AopB -> BopA
 commutativities=((True,),(True,),(True,),(False,False),(True,False),(True,False,False,False),(False,),(False,)) #with themselves
+#if can do AopBopC -> AopCopB
 associativities=((True,),(True,),(True,),(False,False),(True,False),(True,False,False,False),(False,),(False,))
+#if right-associative
 rights=         ( False,  False,  False,  False,        False,       False,                   False,   True)
 (ops,unc,una)=map(lambda p: tuple(decompose(p)),(prec,commutativities,associativities))
+#if can do... Aop1Bop2C -> Aop2Cop1B?
 assocpairs=     (  (),     (),     (),     (),  (),      (), (),     (8,),(7,),(),(),          (),      ())
 assocpairs=tuple(starmap(lambda i,a: (i,)*a[0]+a[1],enumerate(zip(una,assocpairs))))
-struc=[]
+struc=[]# the expression getting manipulated
+#tokenize
 acc=''
 for i in inp:
     if i in ('(',')')+ops:
@@ -29,7 +39,9 @@ for i in inp:
         acc+=i
 if acc:
     struc.append(acc)
-struc=list(map(lambda n: int(n) if all(map(digits.__contains__,n)) else n,struc)) #recognise ints
+#recognise ints
+struc=list(map(lambda n: int(n) if all(map(digits.__contains__,n)) else n,struc))
+#constant-fold negation
 s=0
 while s<len(struc):
     if struc[s]=='-' and isinstance(struc[s+1],Number):
@@ -41,7 +53,7 @@ while s<len(struc):
             struc[s+1]*=-1
     else:
         s+=1
-
+#handle ** //
 new=[]
 no=False
 for a,b in pairwise(struc):
@@ -54,6 +66,7 @@ for a,b in pairwise(struc):
         else:
             new.append(a)
 new.append(struc[-1])
+#brackets
 openings=[]
 closings=[]
 bracks=[]
@@ -81,7 +94,8 @@ if len(openings)!=len(closings) or left:
 struc=[]
 i=0
 inds=[0]
-strucget=(lambda struc,inds: reduce(lambda a,b: a[b],inds[:-1],struc))
+strucget=(lambda struc,inds: reduce(lambda a,b: a[b],inds[:-1],struc))#get array from a nested struc
+#make nested array out of bracketing
 while i<len(new):
     if i in openings:
         strucget(struc,inds).append([])
@@ -95,6 +109,12 @@ while i<len(new):
     i+=1
 print(struc)
 def structrans(struc,f=None,lf=None,rev=False,fints=False):
+    '''Apply f to each nested element of struc, and lf to each nested list thereof.
+    struc - a possibly very nested array
+    f, lf - functions: struc, inds -> (struc, inds)
+    rev - bool: traverse struc backwards
+    fints - bool: I don't really know what it does
+    '''
     inds=[len(struc)-1 if rev else 0]
     b=False
     while 0<=inds[0]<len(struc):
@@ -123,6 +143,9 @@ def structrans(struc,f=None,lf=None,rev=False,fints=False):
     return(struc)
 
 def lisp(struc,inds,o,rev=False): #my beloved
+    '''Convert to Lisp-style syntax:
+    ['~', a, b] -> []
+    '''
     if strucget(struc,inds) in o:
         if strucget(struc,inds)=='~':
             operands=strucget(struc,inds[:-1])[inds[-2]:inds[-2]+2]
@@ -269,4 +292,3 @@ while dist<12 and length!=len(states):
                     stateTransitions.append([])
                     stateTransitions[i].append(len(states)-1)
     dist+=1
-#print('\n'.join(map(str,states)))
